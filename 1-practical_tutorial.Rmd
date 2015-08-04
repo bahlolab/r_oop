@@ -1,0 +1,116 @@
+A practical tutorial on S4 programming
+======================================
+* Author: Laurent Gatto
+* Sources:
+    * https://github.com/lgatto/TeachingMaterial
+    * https://github.com/lgatto/roo
+    * https://github.com/lgatto/S4-tutorial
+
+## Microarrays
+Say we have conducted a microarray experiment using `n` probes across `m`
+individuals.
+
+* We can represent the results of this experiment using a matrix
+  of size `n` x `m` called `marray`. This matrix stores the intensity for
+  probe `1, 2, ..., n` for sample `1, 2, ..., m`.
+* The sample annotation can be described in a data.frame `samp_annot`
+  with `m` rows and any number of columns.
+* The probe annotation can be described in a data.frame
+  `prob_annot` with `n` rows and any number of columns.
+
+
+```{r}
+n <- 10
+m <- 6
+intensities <- rnorm(n * m, mean = 10, sd = 5)
+marray <- matrix(intensities, ncol = m)
+marray
+
+# sample annotation
+samp_annot <- data.frame(sampleID = 1:m,
+			 condition = rep(c("WT", "MUT"), each = 3))
+rownames(samp_annot) <- colnames(marray) <- LETTERS[1:m]
+samp_annot
+
+# probe annotation
+prob_annot <- data.frame(geneID = 1:n,
+			  pathway = sample(LETTERS, n, replace = TRUE))
+rownames(prob_annot) <- rownames(marray) <- paste0("probe", 1:n)
+prob_annot
+
+marray
+```
+
+Now let's add these three pieces to a list:
+
+```{r}
+maexp <- list(marray = marray,
+	      samp_annot = samp_annot,
+	      prob_annot = prob_annot)
+rm(marray, samp_annot, prob_annot, intensities)
+str(maexp)
+ls()
+```
+
+Let's access and manipulate some of the elements of the `maexp` list:
+
+```{r}
+maexp$samp_annot # the whole data.frame
+summary(maexp$marray[, "A"]) # the A sample
+(wt <- maexp$samp_annot[, "condition"] == "WT") # WT samples
+maexp$marray["probe8", wt] # probe8 for WT samples
+maexp[["marray"]]["probe3", !wt] # probe3 for MUT samples
+```
+
+```{r}
+boxplot(maexp$marray,
+	main = paste0("Boxplot representing the intensity\n",
+		      "distributions of the 10 probes for the",
+		      " 6 samples"),
+	xlab = "Sample", ylab = "Probe Intensity")
+```
+
+Now let's extract the first 10 probes for the first 3 samples:
+
+```{r}
+x <- 1:5
+y <- 1:3
+marray2 <- maexp$marray[x, y]
+prob_annot2 <- maexp$prob_annot[x, ]
+samp_annot2 <- maexp$samp_annot[y, ]
+maexp2 <- list(marray = marray2,
+	       samp_annot = samp_annot2,
+	       prob_annot = prob_annot2)
+rm(marray2, samp_annot2, prob_annot2)
+str(maexp2)
+```
+
+As you can see it's a bit cumbersome and error-prone. There's a much better way
+to manipulate "objects" like microarrays.
+
+
+## Define the class MArray
+We can define a class with the `setClass` function. It requires a name
+(`MArray`) and a content structure. The different elements of an S4 class are
+called slots. When defining the slots, we provide their names and classes as a
+named vector or list. You need to create objects with exactly these types of
+slots.
+
+```{r}
+MArray <- setClass("MArray",
+		   slots = c(marray = "matrix",
+			     samp_annot = "data.frame",
+			     prob_annot = "data.frame"))
+```
+
+The `setClass` function returns a constructor that can be used to create an
+instance (object) of the MArray class.
+
+
+```{r}
+MArray() # an empty object
+# MArray(marray = 1:2) # not allowed since should be matrix
+MArray(marray = matrix(1:2)) # not allowed since should be matrix
+```
+
+
