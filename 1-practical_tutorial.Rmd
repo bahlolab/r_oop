@@ -6,7 +6,7 @@ A practical tutorial on S4 programming
     * https://github.com/lgatto/roo
     * https://github.com/lgatto/S4-tutorial
 
-## Microarrays
+## Experiment
 Say we have conducted a microarray experiment using `n` probes across `m`
 individuals.
 
@@ -89,7 +89,7 @@ As you can see it's a bit cumbersome and error-prone. There's a much better way
 to manipulate "objects" like microarrays.
 
 
-## Define the class MArray
+## Define a class
 We can define a class with the `setClass` function. It requires a name
 (`MArray`) and a content structure. The different elements of an S4 class are
 called slots. When defining the slots, we provide their names and classes as a
@@ -110,7 +110,40 @@ instance (object) of the MArray class.
 ```{r}
 MArray() # an empty object
 # MArray(marray = 1:2) # not allowed since should be matrix
-MArray(marray = matrix(1:2)) # not allowed since should be matrix
+MArray(marray = matrix(1:2)) # now allowed
+ma <- MArray(marray = maexp$marray,
+	     samp_annot = maexp$samp_annot,
+	     prob_annot = maexp$prob_annot
+	     )
+class(ma)
+ma
 ```
 
+We can access individual slots from an object using `@` in a similar manner to
+`$` with lists:
 
+
+```{r}
+ma@samp_annot
+```
+
+## Methods
+A generic function, or generic for short, is a function that dispatches methods
+to their appropriate class-specific implementation. A method `foo` will work in
+a way `X` with an object of class `A` and in a different way `Y` with an object
+of class `B`.
+
+We define methods using `setMethod`. Before we do so, we need to check if such
+a method already exists. If it does, then a generic also exists and we can
+proceed normally. If it does not, then we first need to create the generic and
+then proceed with the method.
+
+### The `show` method
+The `show` method allows to define a convenient and more compact view of an
+object when we type its name in the console.
+
+```{r}
+show
+isGeneric("show")
+hasMethod("show")
+```
