@@ -135,8 +135,9 @@ of class `B`.
 
 We define methods using `setMethod`. Before we do so, we need to check if such
 a method already exists. If it does, then a generic also exists and we can
-proceed normally. If it does not, then we first need to create the generic and
-then proceed with the method.
+proceed normally with the new method.
+If it does not, then we first need to create the generic and
+then proceed with the new method.
 
 ### The `show` method
 The `show` method allows to define a convenient and more compact view of an
@@ -146,4 +147,53 @@ object when we type its name in the console.
 show
 isGeneric("show")
 hasMethod("show")
+showMethods("show")
+args("show")
 ```
+
+As there is already a `show` method, we can proceed with the new method
+definition using the `setMethod` function. We need a couple of things first:
+
+* the class of the object we're implementing the method for:
+    - MArray passed via the `signature` argument;
+* the argument names that are defined in the generic:
+    - use `args("show")` or just `show`;
+    - this gives a single argument called `object`;
+    - this name will need to be used when writing the `definition` of our
+      method;
+
+```{r}
+ma
+setMethod("show",
+	  signature = "MArray",
+	  definition = function(object) {
+	      cat("An object of class ", class(object), "\n", sep = "")
+	      cat(" ", nrow(object@marray), " features by ",
+		  ncol(object@marray), " samples. \n", sep = "")
+	      invisible(NULL)
+	  })
+ma
+```
+
+### Accessor methods
+Let's create a method `marray` to access the `marray` slot from the `MArray`
+class.
+
+* First we create a new generic function with `setGeneric`. The name of the
+  generic is defined, together with the name of the argument(s) that will have
+  to be re-used when defining class-specific methods.
+
+```{r}
+setGeneric("marray", function(object, ...) standardGeneric("marray"))
+```
+
+* Now we can create the new method using `setMethod`:
+
+```{r}
+setMethod("marray", "MArray",
+	  function(object) object@marray)
+
+marray(ma)
+```
+
+
