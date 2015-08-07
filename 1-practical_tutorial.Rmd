@@ -1,10 +1,5 @@
 A practical tutorial on S4 programming
 ======================================
-* Author: Laurent Gatto
-* Sources:
-    * https://github.com/lgatto/TeachingMaterial
-    * https://github.com/lgatto/roo
-    * https://github.com/lgatto/S4-tutorial
 
 ## Experiment
 Say we have conducted a microarray experiment using `n` probes across `m`
@@ -20,6 +15,7 @@ individuals.
 
 
 ```{r}
+set.seed(42)
 n <- 10
 m <- 6
 intensities <- rnorm(n * m, mean = 10, sd = 5)
@@ -89,7 +85,7 @@ As you can see it's a bit cumbersome and error-prone. There's a much better way
 to manipulate "objects" like microarrays.
 
 
-## Define a class
+## Class Definition
 We can define a class with the `setClass` function. It requires a name
 (`MArray`) and a content structure. The different elements of an S4 class are
 called slots. When defining the slots, we provide their names and classes as a
@@ -139,7 +135,7 @@ proceed normally with the new method.
 If it does not, then we first need to create the generic and
 then proceed with the new method.
 
-### The `show` method
+### `show` method
 The `show` method allows to define a convenient and more compact view of an
 object when we type its name in the console.
 
@@ -175,7 +171,7 @@ setMethod("show",
 ma
 ```
 
-### Accessor methods
+### Accessor method
 Let's create a method `marray` to access the `marray` slot from the `MArray`
 class.
 
@@ -196,4 +192,192 @@ setMethod("marray", "MArray",
 marray(ma)
 ```
 
+* Let's do the same for the `samp_annot` and `prob_annot` slots:
 
+```{r}
+setGeneric("samp_annot", function(object, ...) standardGeneric("samp_annot"))
+setMethod("samp_annot", "MArray",
+	  function(object) object@samp_annot)
+samp_annot(ma)
+
+setGeneric("prob_annot", function(object, ...) standardGeneric("prob_annot"))
+setMethod("prob_annot", "MArray",
+	  function(object) object@prob_annot)
+prob_annot(ma)
+```
+
+### Subset method
+We can create a subset method for an `MArray` object using the `[` operator.
+Let's first look at a couple of usage examples:
+
+```{r}
+letters[1:5]
+`[`(letters, 1:5) # just like a function!
+```
+
+We can directly implement this subsetting operator for the `MArray` class since
+primitive functions are automatically promoted to generics when a method of the
+same name is defined.
+
+Using `?[` we can see that the function takes four arguments: the `x` object,
+the `i` and `j` indices and the `drop` logical. We can ignore the final
+argument by using the "missing" value:
+
+```{r}
+setMethod("[", "MArray", 
+	  function(x, i, j, drop = "missing") {
+	      .marray <- x@marray[i, j]
+	      .prob_annot <- x@prob_annot[i, ]
+	      .samp_annot <- x@samp_annot[j, ]
+	      MArray(marray = .marray,
+		     prob_annot = .prob_annot,
+		     samp_annot = .samp_annot)
+	  })
+
+ma[1:3, c(2, 5)] # first 3 probes of samples 2 and 5
+```
+
+### Validity method
+As discussed earlier, the number of rows in the `marray` slot needs to be equal
+to the number of rows in the `prob_annot` slot, while the number of columns
+needs to be equal to the number of rows in the `samp_annot` slot. The
+respective names also need to be identical:
+
+```{r}
+setValidity("MArray", function(object) {
+		msg <- NULL
+		valid <- TRUE
+		if (nrow(marray(object)) != nrow(prob_annot(object))) {
+		    valid <- FALSE
+		    msg <- c(msg, paste0("Number of data and probe annotation",
+				    " rows must be identical."))
+		}
+		if (ncol(marray(object)) != nrow(samp_annot(object))) {
+		    valid <- FALSE
+		    msg <- c(msg, paste0("Number of data columns and sample ",
+					 "annotation rows must be identical."))
+		}
+		if (!identical(rownames(marray(object)),
+			       rownames(prob_annot(object)))) {
+		    valid <- FALSE
+		    msg <- c(msg, paste0("Data and probe annotation row names",
+					 " must be identical"))
+		}
+		if (!identical(colnames(marray(object)),
+			       rownames(samp_annot(object)))) {
+		    valid <- FALSE
+		    msg <- c(msg, paste0("Data column names and ",
+					 "sample annotation row names",
+					 " must be identical"))
+		}
+		if (valid) TRUE else msg
+	  })
+
+validObject(ma)
+
+```
+How about creating an invalid object?
+
+```{r error=TRUE}
+MArray(marray = matrix(1:12, ncol = 3),
+       prob_annot = prob_annot(ma),
+       samp_annot = samp_annot(ma))
+```
+
+### Replacement method
+How can we update the content of slots? We can do so directly, but this
+violates the encapsulation of our data and makes it possible to break the
+validity of an object.
+
+```{r error=TRUE}
+ma@marray <- 1
+(broken <- ma)
+broken@marray <- matrix(1:9, ncol = 3)
+broken
+validObject(broken)
+```
+
+We can use a special type of replacement method using the code
+`slot(object)<-syntax`. You need to concatenate the name of the method and the
+assignment operator. A method to replace the slot that can be accessed with the
+`marray` accessor will be called `marray<-`. It requires at least two
+arguments: the `object` to be updated and the replacement `value`.
+And since there is no `marray<-` generic, we first need to define one:
+
+```{r}
+setGeneric("marray<-",
+	   function(object, value) standardGeneric("marray<-"))
+```
+
+In the definition of the replacement method we need to check that the
+user-specified `value` does not break the validity of `object`:
+
+```{r}
+setMethod("marray<-", "MArray",
+	  function(object, value) {
+	      object@marray <- value
+	      if (validObject(object))
+		  return(object)
+	  })
+```
+
+Now we can try it out:
+
+```{r error=TRUE}
+tmp <- matrix(rnorm(n * m, 10, 5), ncol = m)
+marray(ma) <- tmp
+colnames(tmp) <- LETTERS[1:m]
+rownames(tmp) <- paste0("probe", 1:n)
+head(marray(ma), n = 2) # before
+marray(ma) <- tmp
+head(marray(ma), n = 2) # after
+```
+
+* Let's do the same for the `samp_annot` and `prob_annot` slots:
+
+```{r}
+# First the generics
+setGeneric("prob_annot<-",
+	   function(object, value) standardGeneric("prob_annot<-"))
+setGeneric("samp_annot<-",
+	   function(object, value) standardGeneric("samp_annot<-"))
+
+# Now the methods
+setMethod("prob_annot<-", "MArray",
+	  function(object, value) {
+	      object@prob_annot <- value
+	      if (validObject(object))
+		  return(object)
+	  })
+setMethod("samp_annot<-", "MArray",
+	  function(object, value) {
+	      object@samp_annot <- value
+	      if (validObject(object))
+		  return(object)
+	  })
+
+```
+
+Now we can try them out:
+
+```{r}
+samp_annot(ma)$sex <- rep(c("M", "F"), 3)
+samp_annot(ma)
+```
+
+### Dissection methods
+We can find out more about a class without reading its source code by using the
+following functions:
+
+```{r}
+slotNames(ma) 
+getClass("MArray") # shows slots and their classes
+showMethods("marray")
+showMethods(classes = "MArray")
+getMethod("marray", "MArray") # show method code
+getMethod("prob_annot", "MArray") 
+```
+
+
+### Sources:
+* https://github.com/lgatto/S4-tutorial
