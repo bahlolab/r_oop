@@ -1,0 +1,163 @@
+Creating a `sequences` S4 package
+===============================
+This simple package will handle sequence data. It will be able to load a FASTA
+file and based on sequence type (DNA or RNA) do some operations, like finding
+the sequence length or reverse sequence.
+
+Functions we would like to have include:
+
+* `readFasta()`: read in a single sequence from a FASTA file;
+* `id()`, `seq()`: return the ID and the actual sequence of the sequence;
+* `rev()`: return the reverse DNA/RNA sequence;
+* `length()`: return the DNA/RNA sequence length;
+* `comp()`: return complementary DNA/RNA sequence;
+* `transcribe()`: return RNA sequence for DNA sequence.
+
+
+Naive `readFasta()`
+-------------------
+Loads the data from a FASTA file and somehow represents it in R.
+
+A FASTA file has a header line starting with `>` and then a nucleotide sequence
+(DNA: ATCG; RNA: AUCG).
+
+```
+> example dna sequence
+agcatacgacgactacgacactacgacatcagacactacagactactac
+gactacagacatcagacactacatatttacatcatcagagattatatta
+acatcagacatcgacacatcatcatcagcatcat
+```
+
+```{r}
+# Create a class
+setClass("GenericSeq",
+	 slots = c(id = "character",
+		   sequence = "character",
+		   alphabet = "character"))
+
+# Create an object of this class
+genseq <- new("GenericSeq",
+	      id = "sequence name",
+	      sequence = "AGATACCCCGAAACGA",
+	      alphabet = c("A", "C", "G", "T"))
+genseq
+genseq@id
+slot(genseq, "id")
+```
+
+```{r}
+readFasta <- function(infile) {
+    lines <- readLines(infile)
+    header <- grep("^>", lines)
+    if (length(header) > 1) {
+	warning("Reading first sequence only.")
+	lines <- lines[header[1]:(header[2]-1)]
+	header <- header[1]
+    }
+    id <- sub("^> *", "", lines[header], perl = TRUE)
+    sequence <- toupper(paste(lines[(header+1):length(lines)], collapse = ""))
+    alphabet <- unique(strsplit(sequence, "")[[1]])
+    return.value <- new("GenericSeq",
+			id = id, sequence = sequence, alphabet = alphabet)
+    return.value
+}
+```
+
+Now let's read the FASTA file:
+
+```{r}
+s <- readFasta("3-sequences_input.fasta")
+s
+```
+
+Generics and methods
+--------------------
+* If a generic `id()` **does not exist already**, we need to create it to be
+  able to use our method.
+
+```{r}
+setGeneric("id", function(obj, ...) standardGeneric("id"))
+setMethod("id", "GenericSeq", function(obj, ...) obj@id)
+id(genseq)
+```
+
+* If a generic `rev()` **exists already**, we can then create a method for our
+  class.
+
+```{r}
+isGeneric("rev")
+show(rev) # show source code
+```
+
+Since the source code contains `UseMethod("rev")`, it is an S3 generic. So we
+need to define a S4 generic **with exactly the same parameters**.
+
+```{r}
+setGeneric("rev", function(x) standardGeneric("rev"))
+setMethod("rev", "GenericSeq", function(x)
+	  paste(rev(unlist(strsplit(x@sequence, ""))), collapse = ""))
+```
+
+All primitive functions (e.g. `c()`) have implicit generics.
+
+```{r}
+rev(genseq)
+rev(1:5)
+showMethods("rev")
+```
+
+Getters and Setters
+-------------------
+You should not use `@` in your code to access slots. Instead, you should
+create getter and setter methods for all slots you want to expose.
+
+```{r}
+setGeneric("id<-",
+	   function(object, value) standardGeneric("id<-"))
+setReplaceMethod("id",
+		 signature(object = "GenericSeq",
+			   value = "character"),
+		 function(object, value) {
+		     object@id <- value
+		     return(object)
+		 })
+id(genseq)
+id(genseq) <- "new sequence name"
+id(genseq)
+genseq
+```
+
+Let's try the following introspection ("dissection") methods:
+
+```{r}
+showMethods("rev")
+getClass("GenericSeq")
+slotNames(genseq)
+getMethod("rev", "GenericSeq")
+findMethods("rev")
+isGeneric("rev")
+```
+
+Let's implement some more getter/setter methods:
+
+```{r}
+setGeneric("seq", function(obj, ...) standardGeneric("seq"))
+setMethod("seq", "GenericSeq", function(obj, ...) obj@sequence)
+seq(genseq)
+```
+
+```{r}
+setGeneric("seq<-",
+	   function(object, value) standardGeneric("seq<-"))
+setReplaceMethod("seq",
+		 signature = c(object = "GenericSeq",
+			       value = "character"),
+		 function(object, value) {
+		     object@sequence <- value
+		     return(object) })
+genseq2 <- genseq
+seq(genseq2) <- "AAAAACCCCGGGTTTT"
+seq(genseq2)
+genseq2
+
+```

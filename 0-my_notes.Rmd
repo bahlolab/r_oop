@@ -1,0 +1,149 @@
+S4 Object-Oriented Programming
+==============================
+Here I'll keep notes about OOP using the S4 object system.
+
+Classes and Instances/Objects
+-----------------------------
+A class is created using `setClass`. This takes the following key arguments:
+
+* A __name__ for the class;
+* A named list of __slots__ for the class;
+* A class that it __contains__ i.e. inherits from.
+* A default __prototype__ for the class;
+
+
+```{r}
+setClass("Person",
+	 slots = list(
+	   name = "character", age = "numeric"),
+	 prototype = list(
+	   name = NA_character_, age = NA_real_)
+	 )
+
+# Employee inherits Person
+setClass("Employee",
+	 slots = list(boss = "Person"),
+	 contains = "Person")
+getSlots("Person")
+getSlots("Employee")
+```
+
+Create a new object of a class:
+
+```{r}
+nat <- new("Person", name = "Natalie", age = 36)
+peter <- new("Employee", name = "Peter", age = 30, boss = nat)
+nat
+peter
+```
+
+Generic functions and methods
+------------------------------
+In order to define a method for a specific class, you need to make sure that a
+generic method is defined for your method.
+But how can you examine if a method has a generic?
+
+* All primitive functions (e.g. check `getGenerics()`) have implicit generics;
+* Use `isGeneric()`;
+* Use `show()`;
+
+```{r, error=TRUE}
+getGenerics()
+isGeneric("age")
+show(age)
+isGeneric("name")
+show(name)
+```
+
+```{r}
+setGeneric("age", function(obj, ...) standardGeneric("age"))
+setMethod("age", "Person", function(obj, ...) obj@age)
+setGeneric("name", function(obj, ...) standardGeneric("name"))
+setMethod("name", "Person", function(obj, ...) obj@name)
+isGeneric("age")
+show(age)
+isGeneric("name")
+show(name)
+age(nat)
+name(nat)
+str(nat)
+```
+
+Validity methods
+----------------
+You can define methods that apply additional restrictions for the validity of an object:
+
+```{r}
+check_person <- function(object) {
+  errors <- character()
+  length_age <- length(object@age)
+  if (length_age != 1) {
+    msg <- paste0("Age is length ", length_age, ". Should be 1.")
+    errors <- c(errors, msg)
+  }
+  
+  length_name <- length(object@name)
+  if (length_name != 1) {
+    msg <- paste0("Name is length ", length_name, ". Should be 1.")
+    errors <- c(errors, msg)
+    
+  }
+  
+  if (length(errors) == 0) TRUE else errors
+}
+```
+
+Let's try it out:
+
+```{r, error=TRUE}
+setClass("Person",
+         slots = list(name = "character",
+                      age = "numeric"),
+         validity = check_person)
+new("Person", name = "Hadley")
+new("Person", name = "Hadley", age = 1:10)
+```
+
+But note that the check is not automatically applied when we modify slots directly:
+
+```{r}
+hadley <- new("Person", name = "Hadley", age = 31)
+hadley@age <- 1:10
+hadley
+```
+
+You can force a check with `validObject`:
+
+```{r, error=TRUE}
+validObject(hadley)
+
+```
+
+Accessor methods
+----------------
+You can access a slot of an object using `@` or `slot`:
+
+```{r, error=TRUE}
+peter@age
+slot(peter, "age")
+nat@age
+slot(nat, "age")
+age(nat) # not defined yet
+```
+
+But this is not an efficient way of doing so. You should instead define
+an accessor method (_getter_). 
+
+Display Source Code
+-------------------
+Let's say I'm using the `QDNAseq` package, and I want to see what the `plot`
+function does with objects of class `QDNAseqReadCounts`. I need to use the
+`getMethod` function or the selectMethod if the class inherits from a parent
+class:
+
+```{r}
+require(QDNAseq)
+methods("plot")
+showMethods("plot")
+head(selectMethod("plot", signature = c("QDNAseqReadCounts", "missing")), n = 20)
+```
